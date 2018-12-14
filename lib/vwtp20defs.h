@@ -2,11 +2,19 @@
 // Reference: SAE J2819 FEB2008
 // TP2.0 Vehicle Diagnostic Protocol
 
-// typedef struct {
-//   uint8_t dest : 8;
-//   uint8_t op : 8;
-//   uint32_t param : 32;
-// } tVWTP;
+// VWTP default data structure
+typedef struct {
+  uint8_t dest : 8;
+  uint8_t op : 8;
+  uint64_t param : 40;
+} tVWTP;
+
+typedef struct {
+  uint8_t dest : 8;
+  uint8_t op : 4;
+  uint8_t seq : 4;
+  uint64_t payload : 40;
+} tVWTP_data;
 
 // typedef struct {
 //   uint8_t dest : 8;      // TP Target Address

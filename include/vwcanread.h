@@ -4,5 +4,6 @@
 void readCmd(char);
 void helpCmd();
 void dumpMessages();
+void dumpRam();
 
 #endif

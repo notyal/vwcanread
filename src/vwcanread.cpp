@@ -1,21 +1,24 @@
+// vwcanread.cpp
+
+// #define DEBUG_MEMORY
+
 #include "vwcanread.h"
 #include <Arduino.h>
-#include <Canbus.h>
-#include <defaults.h>
-#include <global.h>
-#include <mcp2515.h>
-#include <mcp2515_defs.h>
+#include <CAN.h>
+#include <SPI.h>
+
+#ifdef DEBUG_MEMORY
+#define DEBUG_MEMORY_MS 5000 // min ms between printing memory messages
+#include <MemoryFree.h>
+#endif
 
 void setup() {
   Serial.begin(115200);
   Serial.println();
 
-  if (Canbus.init(CANSPEED_500))
-    Serial.println("I] CAN Init OK");
-  else
-    Serial.println("I] CAN Init ERROR");
-
+  CAN.begin(CAN_BPS_500K);
   delay(1000);
+  Serial.println(F("CAN Init"));
   helpCmd();
 }
 
@@ -30,10 +33,33 @@ void loop() {
 void readCmd(char cmd) {
   switch (cmd) {
   case 'D':
-    Serial.println("I] Dumping canbus messages... [press any key to exit]");
+    Serial.println(F("I] Dumping canbus messages... [press any key to exit]"));
     delay(500);
-    while (!Serial.available())
+
+// Run while no serial is rx
+#ifdef DEBUG_MEMORY
+    unsigned long debug_memory_time = millis();
+#endif
+    while (!Serial.available()) {
+#ifdef DEBUG_MEMORY
+      if (millis() - debug_memory_time >= DEBUG_MEMORY_MS) {
+        Serial.print(F("I] freeMemory()="));
+        Serial.println(freeMemory());
+        debug_memory_time = millis();
+      }
+#endif
+
       dumpMessages();
+    }
+    break;
+
+  case 'R':
+    Serial.println(F("I] Dumping ram... [press any key to exit]"));
+    delay(500);
+
+    // Run while no serial is rx
+    while (!Serial.available())
+      dumpRam();
     break;
 
   default:
@@ -45,27 +71,39 @@ void readCmd(char cmd) {
 // help cmd
 void helpCmd() {
   Serial.println();
-  Serial.println("I] Valid commands:");
-  Serial.println("I] D  dump canbus data");
+  Serial.println(F("I] Valid commands:"));
+  Serial.println(F("I] D  dump canbus data"));
+  Serial.println(F("I] R  dump ecu ram"));
 }
 
 // D  dump canbus messages
 void dumpMessages() {
-  tCAN message;
+  CAN_Frame m;
 
-  if (mcp2515_check_message() && mcp2515_get_message(&message) &&
-      !(message.id == 0x280 || message.id == 0x284 || message.id == 0x288 ||
-        message.id == 0x380 || message.id == 0x480 || message.id == 0x488 ||
-        message.id == 0x580 || message.id == 0x588)) {
+  if (CAN.available()) {
+    m = CAN.read();
 
-    Serial.print("D] 0x");
-    Serial.print(message.id, HEX);
-    Serial.print("  ");
-    char buf[3] = {0};
-    for (int i = 0; i < message.header.length; i++) {
-      snprintf(buf, sizeof(buf), "%02x", message.data[i]);
-      Serial.print(buf);
-    }
-    Serial.println("");
+    // return if m.id matches
+    if (m.id == 0x280 || m.id == 0x284 || m.id == 0x288 || m.id == 0x380 ||
+        m.id == 0x480 || m.id == 0x488 || m.id == 0x580 || m.id == 0x588)
+      return;
+
+    Serial.print(F("D] 0x"));
+    Serial.print(m.id, HEX);
+    Serial.print(F("  "));
+    char mbuf[3] = {0};
+
+    if (!m.rtr)
+      for (byte i = 0; i < m.length; i++) {
+        snprintf(mbuf, sizeof(mbuf), "%02x", m.data[i]);
+        Serial.print(mbuf);
+      }
+
+    Serial.println();
   }
+}
+
+// R  dump ecu ram
+void dumpRam() {
+  // TODO
 }

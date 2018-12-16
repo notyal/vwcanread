@@ -6,5 +6,6 @@ void readCmd(char);
 void helpCmd();
 void dumpMessages();
 void dumpRam();
+void liveMode();
 
 #endif

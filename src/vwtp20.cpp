@@ -48,7 +48,6 @@ void VWTP20::Connect() {
   //   - REF: https://github.com/seishuku/teensycanbusdisplay
   // send chan_test messages for keepalive
 
-  CAN.clearFilter();
   uint8_t counter = 0;
 
   // setup channel
@@ -72,7 +71,8 @@ void VWTP20::Connect() {
 
         Serial.print("ChanSetup RX:");
         PrintPacket(f);
-        Serial.println(F("I] Channel established."));
+        Serial.print(millis());
+        Serial.println(F(" I] Channel established."));
         // DEBUG
         char buf[64];
         snprintf(buf, sizeof(buf),
@@ -97,45 +97,42 @@ void VWTP20::Connect() {
   } while (connected < 1);
 
   // set timing
+  delay(10);
   setTiming();
 
-  // setup filter for ECU TODO FIXME
-  // CAN_Filter filter;
-  // filter.id = ecuID;
-  // CAN.setFilter(filter);
+  // // wait for message from ECU
+  // CAN_Frame f;
+  // counter = 0;
+  // do {
+  //   delay(5);
+  //   if (CAN.available()) {
+  //     f = CAN.read();
+  //     if (f.id == 0x740 || f.id == 0x300 || f.id == 0x200 || f.id == 0x201)
+  //       PrintPacket(f);
+  //   }
 
-  // wait for message from ECU
-  CAN_Frame f;
-  counter = 0;
-  do {
-    delay(5);
-    if (CAN.available()) {
-      f = CAN.read();
-      if (f.id == ecuID || f.id == clientID || f.id == 0x200 || f.id == 0x201)
-        PrintPacket(f);
-    }
+  //   // timeout counter
+  //   if (++counter > 200) {
+  //     Serial.println(F("E] Timing setup timed out."));
+  //     return;
+  //   }
+  // } while (!(f.id == ecuID && f.length == 6 && f.data[1] ==
+  // VWTP_TPDU_CONNACK));
 
-    // timeout counter
-    if (++counter > 200) {
-      Serial.println(F("E] Timing setup timed out."));
-      return;
-    }
-  } while (!(f.id == ecuID && f.length == 6 && f.data[1] == VWTP_TPDU_CONNACK));
+  // // a1 0f 8a ff 4a ff
+  // if (f.id == ecuID && f.length == 6 && f.data[1] == VWTP_TPDU_CONNACK) {
+  //   connected = 2; // Timing established
 
-  // a1 0f 8a ff 4a ff
-  if (f.id == ecuID && f.length == 6 && f.data[1] == VWTP_TPDU_CONNACK) {
-    connected = 2; // Timing established
+  //   Serial.println(F("I] Timing established."));
+  //   char buf[50];
+  //   snprintf(buf, sizeof(buf), "millis()=%lums, T1=%02x, T3=%02x", millis(),
+  //            f.data[2], f.data[4]);
+  //   txTimeout = f.data[2];
+  //   txMinTime = f.data[4];
+  //   Serial.println(buf);
 
-    Serial.println(F("I] Timing established."));
-    char buf[50];
-    snprintf(buf, sizeof(buf), "millis()=%lums, T1=%02x, T3=%02x", millis(),
-             f.data[2], f.data[4]);
-    txTimeout = f.data[2];
-    txMinTime = f.data[4];
-    Serial.println(buf);
-
-    // TODO Decode timing params to ms
-  }
+  //   // TODO Decode timing params to ms
+  // }
 }
 
 // int VWTP20::prepVwtpMsg(uint8_t *buf, tVWTP_MSG msg) {
@@ -216,10 +213,24 @@ void VWTP20::setTiming() {
   f.data[4] = 0x32; // T3 min time for tx packet 5ms
   f.data[5] = 0xFF; // T4 unused
 
-  Serial.print(F("Timing TX:"));
+  Serial.print(millis());
+  Serial.print(F(" Timing TX:"));
   PrintPacket(f);
 
   CAN.write(f);
+
+  CAN_Frame resp;
+  unsigned long t = millis();
+  do {
+    if (CAN.available())
+      resp = CAN.read();
+    if (millis() - t >= 100) {
+      Serial.println(F("E] Timed out while awaiting a timing response."));
+      return;
+    }
+  } while (f.id != ecuID);
+
+  PrintPacket(resp);
 }
 
 // send chan_test message for keepalive

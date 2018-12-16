@@ -224,13 +224,13 @@ def dfmt(msg):
 
     # format message id
     if m[0] == "0x740":
-        mid = "CLIENT"
+        mid = "0x740 CLIENT "
     elif m[0] == "0x300":
-        mid = "ECU"
+        mid = "0x300 ECU "
 
     # prepare return string
     reset = Back.RESET+Fore.WHITE
-    return '{}{:7.7}{}'.format(Fore.RED, mid, reset) + \
+    return '{}{:13.13}{}'.format(Fore.RED, mid, reset) + \
            '|{}{:2.2}{}'.format(Fore.CYAN, str(len(mbytes)), reset) + \
            '|{}{:5.5}{}'.format(Fore.YELLOW, pmsg, reset) + \
            '|{}{:34.34}{}'.format(Fore.MAGENTA, op, reset) + \

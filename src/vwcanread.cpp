@@ -1,9 +1,9 @@
 // vwcanread.cpp
+#include <Arduino.h>
 
 // #define DEBUG_MEMORY
-
 #include "vwcanread.h"
-#include <Arduino.h>
+#include "vwtp20.h"
 #include <CAN.h>
 #include <SPI.h>
 
@@ -17,7 +17,7 @@ void setup() {
   Serial.println();
 
   CAN.begin(CAN_BPS_500K);
-  delay(1000);
+  delay(500);
   Serial.println(F("CAN Init"));
   helpCmd();
 }
@@ -58,8 +58,8 @@ void readCmd(char cmd) {
     delay(500);
 
     // Run while no serial is rx
-    while (!Serial.available())
-      dumpRam();
+    // while (!Serial.available())
+    dumpRam();
     break;
 
   default:
@@ -105,5 +105,12 @@ void dumpMessages() {
 
 // R  dump ecu ram
 void dumpRam() {
-  // TODO
+  VWTP20 v;
+  v.Connect();
+
+  Serial.print("GetClientID=");
+  Serial.println(v.GetClientID(), HEX);
+
+  Serial.print("GetEcuID=");
+  Serial.println(v.GetEcuID(), HEX);
 }

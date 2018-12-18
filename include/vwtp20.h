@@ -3,13 +3,13 @@
 
 #include "vwtp20defs.h"
 #include <Arduino.h>
-#include <CAN.h>
+#include <canwrapper.h>
 
 class VWTP20 {
 public:
   VWTP20();
   void Connect();
-  void PrintPacket(CAN_Frame);
+  void PrintPacket(tCanFrame);
 
   uint8_t GetSequence();
   uint32_t GetClientID();
@@ -26,12 +26,10 @@ private:
   uint8_t txTimeout;
   uint8_t txMinTime;
 
-  int prepVwtpMsg(uint8_t *buf, tVWTP_MSG msg);
+  // int prepVwtpMsg(uint8_t *buf, tVWTP_MSG msg);
   void init();
   void channelTest();
   void setTiming();
 };
-
-// void readPacket();
 
 #endif

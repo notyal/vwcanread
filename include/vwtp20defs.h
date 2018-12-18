@@ -2,36 +2,37 @@
 #define VWTP20DEFS_H
 
 #include <stdint.h>
+
 // Reference: SAE J2819 FEB2008
 // TP2.0 Vehicle Diagnostic Protocol
 
 // VWTP default data structure (7 bit)
-typedef struct {
-  uint8_t dest : 8;
-  uint8_t op : 8;
-  uint64_t param : 40;
-} tVWTP;
+// typedef struct {
+//   uint8_t dest : 8;
+//   uint8_t op : 8;
+//   uint64_t param : 40;
+// } tVWTP;
 
 // Data (7 bit)
-typedef struct {
-  uint8_t dest : 8;
-  uint8_t op : 4;
-  uint8_t seq : 4;
-  uint64_t payload : 40;
-} tVWTP_data;
+// typedef struct {
+//   uint8_t dest : 8;
+//   uint8_t op : 4;
+//   uint8_t seq : 4;
+//   uint64_t payload : 40;
+// } tVWTP_data;
 
 // MSG (7 bit)
-typedef struct {
-  uint8_t dest : 8;       // TP Target Address
-  uint8_t op : 8;         // Opcode
-  uint8_t rx_id_low : 8;  // RX-Low id for ECU
-  uint8_t rx_valid : 4;   // RX Valid? 0=Valid, 1=Invalid
-  uint8_t rx_id_high : 4; // RX-High id for ECU
-  uint8_t tx_id_low : 8;  // TX-Low for ECU
-  uint8_t tx_valid : 4;   // TX Valid? 0=Valid, 1=Invalid
-  uint8_t tx_id_high : 4; // TX-High for ECU
-  uint8_t apptype : 8;    // 0x01 for KWP2000
-} tVWTP_MSG;
+// typedef struct {
+//   uint8_t dest : 8;       // TP Target Address
+//   uint8_t op : 8;         // Opcode
+//   uint8_t rx_id_low : 8;  // RX-Low id for ECU
+//   uint8_t rx_valid : 4;   // RX Valid? 0=Valid, 1=Invalid
+//   uint8_t rx_id_high : 4; // RX-High id for ECU
+//   uint8_t tx_id_low : 8;  // TX-Low for ECU
+//   uint8_t tx_valid : 4;   // TX Valid? 0=Valid, 1=Invalid
+//   uint8_t tx_id_high : 4; // TX-High for ECU
+//   uint8_t apptype : 8;    // 0x01 for KWP2000
+// } tVWTP_MSG;
 
 //
 // CAN Identifiers

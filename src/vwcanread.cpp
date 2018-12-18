@@ -1,11 +1,10 @@
 // vwcanread.cpp
-#include <Arduino.h>
-
-// #define DEBUG_MEMORY
 #include "vwcanread.h"
 #include "vwtp20.h"
-#include <CAN.h>
-#include <SPI.h>
+#include <Arduino.h>
+#include <canwrapper.h>
+
+// #define DEBUG_MEMORY
 
 #ifdef DEBUG_MEMORY
 #define DEBUG_MEMORY_MS 5000 // min ms between printing memory messages
@@ -16,12 +15,17 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
 
-  CAN.begin(CAN_BPS_500K);
-  delay(500);
-  Serial.println(F("CAN Init"));
-  helpCmd();
+  if (CANInit()) {
+    // delay(500);
+    Serial.println(F("CAN Init"));
+    helpCmd();
+  } else {
+    Serial.println(F("CAN Init Error"));
+    delay(500);
+  }
 }
 
+// main loop
 void loop() {
   while (Serial.available()) {
     char cmd = Serial.read();
@@ -48,7 +52,6 @@ void readCmd(char cmd) {
         debug_memory_time = millis();
       }
 #endif
-
       dumpMessages();
     }
     break;
@@ -90,26 +93,25 @@ void helpCmd() {
 
 // D  dump canbus messages
 void dumpMessages() {
-  CAN_Frame m;
 
-  if (CAN.available()) {
-    m = CAN.read();
+  if (isCANAvail()) {
+    tCanFrame f;
+    CANReadMsg(&f);
 
     // return if m.id matches
-    if (m.id == 0x280 || m.id == 0x284 || m.id == 0x288 || m.id == 0x380 ||
-        m.id == 0x480 || m.id == 0x488 || m.id == 0x580 || m.id == 0x588)
+    if ((f.id & 0xFF0) == 0x280 || (f.id & 0xFF0) == 0x380 ||
+        (f.id & 0xFF0) == 0x480 || (f.id & 0xFF0) == 0x580)
       return;
 
     Serial.print(F("D] 0x"));
-    Serial.print(m.id, HEX);
+    Serial.print(f.id, HEX);
     Serial.print(F("  "));
     char mbuf[3] = {0};
 
-    if (!m.rtr)
-      for (byte i = 0; i < m.length; i++) {
-        snprintf(mbuf, sizeof(mbuf), "%02x", m.data[i]);
-        Serial.print(mbuf);
-      }
+    for (byte i = 0; i < f.length; i++) {
+      snprintf(mbuf, sizeof(mbuf), "%02x", f.data[i]);
+      Serial.print(mbuf);
+    }
 
     Serial.println();
   }

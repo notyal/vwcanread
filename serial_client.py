@@ -8,7 +8,7 @@ init(autoreset=True)
 
 async def main(loop):
     reader, writer = await serial_asyncio.open_serial_connection(
-        url='/dev/cu.wchusbserial1410', baudrate=115200
+        url='/dev/cu.wchusbserial1420', baudrate=115200
     )
     received = recv(reader, "CAN Init")
     await asyncio.wait([received])
@@ -27,7 +27,9 @@ async def send(w, msgs):
 async def recv(r, msgr=None):
     while True:
         msg = await r.readuntil(b'\n')
-        print(f'received: {mfmt(msg.rstrip().decode())}')
+        mf = mfmt(msg.rstrip().decode())
+        if mf is not None:
+            print(f'received: {mf}')
         if (msgr is not None) and msgr.strip() in msg.strip().decode():
             break
 

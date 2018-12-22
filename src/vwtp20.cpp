@@ -8,36 +8,17 @@ VWTP20::VWTP20() {
   clientID = 0x000; // rx
   ecuID = 0x000;    // tx
   connected = 0;
-  txTimeout = 0;
-  txMinTime = 0;
+  txTimeoutMs = 0.0; // T1
+  txMinTimeMs = 0.0; // T3
 }
-
-// tVWTP VWTP20::Ack(uint8_t dest) {
-//   tVWTP tp;
-//   tp.dest = dest;
-//   tp.op = VWTP_CHAN_ACK_POS;
-//   return tp;
-// }
-
-// tVWTP_MSG VWTP20::ChanResp() {
-//   // Identifier 0x201
-//   tVWTP_MSG tp;
-
-//   tp.dest = 0x01; // ECU
-//   tp.op = VWTP_OP_CHAN_SETUP;
-//   tp.tx_id_low = 0;
-//   tp.info_tx = 0x10;
-
-//   return tp;
-// }
 
 // Getters
 uint8_t VWTP20::GetSequence() { return sequence; }
 uint32_t VWTP20::GetClientID() { return clientID; }
 uint32_t VWTP20::GetEcuID() { return ecuID; }
-uint8_t VWTP20::GetConnected() { return connected; }
-uint8_t VWTP20::GetTxTimeout() { return txTimeout; }
-uint8_t VWTP20::GetTxMinTime() { return txMinTime; }
+int8_t VWTP20::GetConnected() { return connected; }
+float VWTP20::GetTxTimeoutMs() { return txTimeoutMs; }
+float VWTP20::GetTxMinTimeMs() { return txMinTimeMs; }
 
 void VWTP20::Connect() {
   // TODO
@@ -52,46 +33,23 @@ void VWTP20::Connect() {
   // setup channel
   do {
     delay(50);
-    init();
+    channelInit();
     if (isCANAvail()) {
       tCanFrame f;
       CANReadMsg(&f);
       // 00 d0 00 03 40 07 01
       if (f.id == 0x201 && f.length == 7 && f.data[1] == VWTP_OP_CHAN_ACK_POS) {
-        // tVWTP_MSG msg;
-        // memcpy(&msg, f.data, sizeof(msg));
-
-        // clientID = msg.tx_id_high << 8 | msg.tx_id_low;
-        // ecuID = msg.rx_id_high << 8 | msg.rx_id_low;
-
         ecuID = (f.data[3] & 0x0F) << 8 | f.data[2];
         clientID = (f.data[5] & 0x0F) << 8 | f.data[4];
 
-        connected = 1; // Channel established
-
-        // Serial.print("ChanSetup RX:");
-        // PrintPacket(f);
-        Serial.print(millis());
-        Serial.println(" I] Channel established.");
-        break;
-        // DEBUG
-        // char buf[64];
-        // snprintf(buf, sizeof(buf),
-        //          "millis()=%lums, clientID=%03lx, ecuID=%03lx", millis(),
-        //          clientID, ecuID);
-        // Serial.println(buf);
-        // DEBUG
-        // char buf[64];
-        // snprintf(buf, sizeof(buf), "OP=%x DEST=%x TXh=%x TXl=%x RXh=%x
-        // RXl=%x",
-        //          msg.op, msg.dest, msg.tx_id_high, msg.tx_id_low,
-        //          msg.rx_id_high, msg.rx_id_low);
-        // Serial.println(buf);
+        connected = 1;
+        break; // goto timing
       }
 
       // timeout counter
       if (++counter > 20) {
         Serial.println(F("E] Channel setup timed out."));
+        connected = -1;
         return;
       }
     }
@@ -99,45 +57,11 @@ void VWTP20::Connect() {
 
   // set timing
   setTiming();
-
-#pragma region testing
-  // // wait for message from ECU
-  // tCanFrame f;
-  // counter = 0;
-  // do {
-  //   delay(5);
-  //   if (isCANAvail()) {
-  //     CANReadMsg(&f);
-  //     if (f.id == 0x740 || f.id == 0x300 || f.id == 0x200 || f.id == 0x201)
-  //       PrintPacket(f);
-  //   }
-
-  //   // timeout counter
-  //   if (++counter > 200) {
-  //     Serial.println(F("E] Timing setup timed out."));
-  //     return;
-  //   }
-  // } while (!(f.id == ecuID && f.length == 6 && f.data[1] ==
-  // VWTP_TPDU_CONNACK));
-
-  // // a1 0f 8a ff 4a ff
-  // if (f.id == ecuID && f.length == 6 && f.data[1] == VWTP_TPDU_CONNACK) {
-  //   connected = 2; // Timing established
-
-  //   Serial.println(F("I] Timing established."));
-  //   char buf[50];
-  //   snprintf(buf, sizeof(buf), "millis()=%lums, T1=%02x, T3=%02x", millis(),
-  //            f.data[2], f.data[4]);
-  //   txTimeout = f.data[2];
-  //   txMinTime = f.data[4];
-  //   Serial.println(buf);
-
-  //   // TODO Decode timing params to ms
-  // }
-#pragma endregion testing
+  if (connected != 2)
+    return; // failure
 }
 
-void VWTP20::init() {
+void VWTP20::channelInit() {
   tCanFrame f;
   f.id = 0x200; // BCAST
   f.length = 7;
@@ -152,16 +76,7 @@ void VWTP20::init() {
   f.data[5] = 0x0 << 4 | 0x3;     // TX_Valid << 4 | TX_ID_High
   f.data[6] = VWTP_APP_TYPE_DIAG; // Apptype
 
-  // prepVwtpMsg(f.data, msg);
-  // memcpy(f.data, &msg, sizeof(msg));
-
-  Serial.print(F("ChanSetup TX:"));
-  PrintPacket(f);
-
   CANSendMsg(f);
-
-  // f = CAN.read();
-  // PrintPacket(f);
 }
 
 // ESTABLISH TIMING
@@ -178,34 +93,59 @@ void VWTP20::setTiming() {
   f.data[4] = 0x32; // T3 min time for tx packet 5ms
   f.data[5] = 0xFF; // T4 unused
 
-  Serial.print(millis());
-  Serial.println(" Timing TX");
-  // PrintPacket(f);
-
   CANSendMsg(f);
 
   // wait for response from ecu
-  // FIXME TODO not working
+  // NOTE: Do not use serial print statements here, unless failure condition.
   tCanFrame resp;
   uint16_t counter = 0;
   do {
     // for counter timing
-    delay(1);
+    delayMicroseconds(100);
 
     if (isCANAvail()) {
-      CANReadMsg(&f);
-      if (resp.id == 0x200 || resp.id == 0x201 || resp.id == 0x300 ||
-          resp.id == 0x710 || resp.id == 0x740)
-        PrintPacket(resp);
+      CANReadMsg(&resp);
     }
     if (++counter >= 1000) {
       Serial.print(millis());
       Serial.println(F(" E] Timed out while awaiting a timing response."));
+      connected = -2;
       return;
     }
   } while (resp.id != ecuID);
 
-  PrintPacket(resp);
+  // PrintPacketMs(resp);
+
+  if (resp.length == 6 && resp.data[0] == 0xA1) {
+    txTimeoutMs = decodeTimingMs(resp.data[2]); // T1
+    txMinTimeMs = decodeTimingMs(resp.data[4]); // T3
+    connected = 2;
+  } else {
+    connected = -2;
+  }
+}
+
+// decode timing from frame
+float VWTP20::decodeTimingMs(uint8_t byt) {
+  uint8_t bunit = (byt >> 6) & 0b11;
+  uint8_t scale = byt & 0b00111111;
+  float unit = 0.0;
+  switch (bunit) {
+  case 0x0:
+    unit = 0.1;
+    break;
+  case 0x1:
+    unit = 1.0;
+    break;
+  case 0x2:
+    unit = 10.0;
+    break;
+  case 0x3:
+    unit = 100.0;
+    break;
+  }
+
+  return unit * scale;
 }
 
 // send chan_test message for keepalive
@@ -219,18 +159,11 @@ void VWTP20::channelTest() {
   CANSendMsg(f);
 }
 
-// Print CAN packet
-void VWTP20::PrintPacket(tCanFrame m) {
-  Serial.print(F("D] 0x"));
-  Serial.print(m.id, HEX);
-  Serial.print(F("  "));
+// DEPRECIATED: Print CAN packet
+void VWTP20::PrintPacket(tCanFrame f) { CANPacketPrint(F("D]"), f); }
 
-  char mbuf[3] = {0};
-
-  for (byte i = 0; i < m.length; i++) {
-    snprintf(mbuf, sizeof(mbuf), "%02x", m.data[i]);
-    Serial.print(mbuf);
-  }
-
-  Serial.println();
+void VWTP20::PrintPacketMs(tCanFrame f) {
+  char buf[16];
+  sprintf(buf, "%06lu D]", millis());
+  CANPacketPrint(buf, f);
 }

@@ -98,22 +98,7 @@ void dumpMessages() {
     tCanFrame f;
     CANReadMsg(&f);
 
-    // return if m.id matches
-    if ((f.id & 0xFF0) == 0x280 || (f.id & 0xFF0) == 0x380 ||
-        (f.id & 0xFF0) == 0x480 || (f.id & 0xFF0) == 0x580)
-      return;
-
-    Serial.print(F("D] 0x"));
-    Serial.print(f.id, HEX);
-    Serial.print(F("  "));
-    char mbuf[3] = {0};
-
-    for (byte i = 0; i < f.length; i++) {
-      snprintf(mbuf, sizeof(mbuf), "%02x", f.data[i]);
-      Serial.print(mbuf);
-    }
-
-    Serial.println();
+    VWTP20::PrintPacketMs(f);
   }
 }
 
@@ -122,11 +107,20 @@ void dumpRam() {
   VWTP20 v;
   v.Connect();
 
-  Serial.print("GetClientID=");
+  Serial.print(F("GetClientID="));
   Serial.println(v.GetClientID(), HEX);
 
-  Serial.print("GetEcuID=");
+  Serial.print(F("GetEcuID="));
   Serial.println(v.GetEcuID(), HEX);
+
+  Serial.print(F("GetConnected="));
+  Serial.println(v.GetConnected());
+
+  Serial.print(F("GetTxMinTimeMs="));
+  Serial.println(v.GetTxMinTimeMs());
+
+  Serial.print(F("GetTxTimeoutMs="));
+  Serial.println(v.GetTxTimeoutMs());
 }
 
 void liveMode() {

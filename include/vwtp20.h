@@ -9,27 +9,29 @@ class VWTP20 {
 public:
   VWTP20();
   void Connect();
-  void PrintPacket(tCanFrame);
+  static void PrintPacket(tCanFrame);
+  static void PrintPacketMs(tCanFrame);
 
   uint8_t GetSequence();
   uint32_t GetClientID();
   uint32_t GetEcuID();
-  uint8_t GetConnected();
-  uint8_t GetTxTimeout();
-  uint8_t GetTxMinTime();
+  int8_t GetConnected();
+  float GetTxTimeoutMs(); // T1
+  float GetTxMinTimeMs(); // T3
 
 private:
   uint8_t sequence;
   uint32_t clientID;
   uint32_t ecuID;
-  uint8_t connected;
-  uint8_t txTimeout;
-  uint8_t txMinTime;
+  int8_t connected;
+  float txTimeoutMs; // T1
+  float txMinTimeMs; // T3
 
   // int prepVwtpMsg(uint8_t *buf, tVWTP_MSG msg);
-  void init();
+  void channelInit();
   void channelTest();
   void setTiming();
+  float decodeTimingMs(uint8_t);
 };
 
 #endif

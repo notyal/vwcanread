@@ -3,30 +3,40 @@
 #include <mcp_can.h>
 #include <mcp_can_dfs.h>
 
-#define DEBUG_CANSEND
+// #define DEBUG_CANSEND
 
 MCP_CAN CAN(10);
 
-bool CANInit() { return CAN_OK == CAN.begin(CAN_500KBPS); }
+// Init CAN and setup masks/filters
+bool CANInit() {
+  uint8_t ret = CAN.begin(CAN_500KBPS);
+  CAN.init_Mask(0, CAN_STDID, ~(0x201 | 0x300) & 0x7FF); // rx ecu mask
+  CAN.init_Mask(1, CAN_STDID, ~(0x200 | 0x740) & 0x7FF); // tx client mask
+  return ret == CAN_OK;
+}
 
-bool isCANAvail() { return CAN_MSGAVAIL == CAN.checkReceive(); }
+// Check if a CAN message has been rx
+bool isCANAvail() { return CAN.checkReceive() == CAN_MSGAVAIL; }
 
+// Read CAN rx message buffer into tCanFrame
 uint8_t CANReadMsg(tCanFrame *f) {
   uint8_t ret = CAN.readMsgBuf(&f->length, f->data);
   f->id = CAN.getCanId();
   return ret;
 }
 
+// Send tCanFrame to CAN tx message buffer
 uint8_t CANSendMsg(tCanFrame f) {
   uint8_t ret = CAN.sendMsgBuf(f.id, CAN_STDID, f.length, f.data);
 
 #ifdef DEBUG_CANSEND
-  CANPacketPrint(F("TX write]"), f);
+  CANPacketPrint(F("TX]"), f);
 #endif
 
   return ret;
 }
 
+// Print tCanFrame to serial
 void CANPacketPrint(const String &msg, tCanFrame m) {
   Serial.print(msg + F(" 0x"));
   Serial.print(m.id, HEX);

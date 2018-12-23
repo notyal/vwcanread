@@ -13,6 +13,13 @@
 void setup() {
   Serial.begin(115200);
   Serial.println();
+  Serial.println(F(__FILE__));
+  Serial.println(F("  Compiled: " __DATE__ " " __TIME__));
+  Serial.print(F("   Arduino: "));
+  Serial.println(ARDUINO);
+  Serial.print(F("PlatformIO: "));
+  Serial.println(PLATFORMIO);
+  Serial.println();
 
   if (CANInit()) {
     // delay(500);

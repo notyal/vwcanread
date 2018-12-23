@@ -1,3 +1,6 @@
+#include "config.h"
+#ifdef CANLIB_SEEED
+
 #include <Arduino.h>
 #include <canwrapper.h>
 #include <mcp_can.h>
@@ -51,3 +54,5 @@ void CANPacketPrint(const String &msg, tCanFrame m) {
 
   Serial.println();
 }
+
+#endif

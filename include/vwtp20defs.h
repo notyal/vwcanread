@@ -1,3 +1,5 @@
+#include "config.h"
+
 #ifndef VWTP20DEFS_H
 #define VWTP20DEFS_H
 

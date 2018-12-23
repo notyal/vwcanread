@@ -1,10 +1,9 @@
 // vwcanread.cpp
 #include "vwcanread.h"
+#include "config.h"
 #include "vwtp20.h"
 #include <Arduino.h>
 #include <canwrapper.h>
-
-// #define DEBUG_MEMORY
 
 #ifdef DEBUG_MEMORY
 #define DEBUG_MEMORY_MS 5000 // min ms between printing memory messages

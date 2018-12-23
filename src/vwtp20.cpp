@@ -1,4 +1,5 @@
 #include "vwtp20.h"
+#include "config.h"
 #include "vwtp20defs.h"
 #include <Arduino.h>
 #include <canwrapper.h>

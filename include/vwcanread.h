@@ -1,3 +1,5 @@
+#include "config.h"
+
 #ifndef VWCANREAD_H
 #define VWCANREAD_H
 

@@ -7,7 +7,7 @@ VWTP20::VWTP20() {
   sequence = 0;
   clientID = 0x000; // rx
   ecuID = 0x000;    // tx
-  connected = 0;
+  connected = NotConnected;
   txTimeoutMs = 0.0; // T1
   txMinTimeMs = 0.0; // T3
 }
@@ -16,7 +16,7 @@ VWTP20::VWTP20() {
 uint8_t VWTP20::GetSequence() { return sequence; }
 uint32_t VWTP20::GetClientID() { return clientID; }
 uint32_t VWTP20::GetEcuID() { return ecuID; }
-int8_t VWTP20::GetConnected() { return connected; }
+CONNECTION VWTP20::GetConnected() { return connected; }
 float VWTP20::GetTxTimeoutMs() { return txTimeoutMs; }
 float VWTP20::GetTxMinTimeMs() { return txMinTimeMs; }
 
@@ -42,23 +42,26 @@ void VWTP20::Connect() {
         ecuID = (f.data[3] & 0x0F) << 8 | f.data[2];
         clientID = (f.data[5] & 0x0F) << 8 | f.data[4];
 
-        connected = 1;
+        connected = Connected;
         break; // goto timing
       }
 
       // timeout counter
       if (++counter > 20) {
         Serial.println(F("E] Channel setup timed out."));
-        connected = -1;
+        connected = NotConnected;
         return;
       }
     }
-  } while (connected < 1);
+  } while (connected < Connected);
 
   // set timing
   setTiming();
-  if (connected != 2)
+  if (connected != ConnectedWithTiming) {
+    connected = ConnectionTimingError;
     return; // failure
+  }
+  ChannelTest();
 }
 
 void VWTP20::channelInit() {
@@ -101,27 +104,27 @@ void VWTP20::setTiming() {
   uint16_t counter = 0;
   do {
     // for counter timing
-    delayMicroseconds(100);
+    delayMicroseconds(10);
 
     if (isCANAvail()) {
       CANReadMsg(&resp);
     }
-    if (++counter >= 1000) {
+    if (++counter >= 10000) {
       Serial.print(millis());
       Serial.println(F(" E] Timed out while awaiting a timing response."));
-      connected = -2;
+      connected = ConnectionTimingError;
       return;
     }
   } while (resp.id != ecuID);
 
-  // PrintPacketMs(resp);
-
-  if (resp.length == 6 && resp.data[0] == 0xA1) {
+  // decode tx timeout and mintime
+  if (resp.length == 6 && resp.data[0] == VWTP_TPDU_CONNACK) {
     txTimeoutMs = decodeTimingMs(resp.data[2]); // T1
     txMinTimeMs = decodeTimingMs(resp.data[4]); // T3
-    connected = 2;
+    connected = ConnectedWithTiming;
   } else {
-    connected = -2;
+    connected = ConnectionTimingError;
+    return;
   }
 }
 
@@ -135,28 +138,103 @@ float VWTP20::decodeTimingMs(uint8_t byt) {
     unit = 0.1;
     break;
   case 0x1:
-    unit = 1.0;
+    unit = 1;
     break;
   case 0x2:
-    unit = 10.0;
+    unit = 10;
     break;
   case 0x3:
-    unit = 100.0;
+    unit = 100;
     break;
   }
 
   return unit * scale;
 }
 
+// convert ms to microseconds
+unsigned int VWTP20::MsToMicros(float ms) { return (unsigned int)(ms * 1000); }
+
 // send chan_test message for keepalive
-void VWTP20::channelTest() {
+bool VWTP20::ChannelTest() {
+  if (connected < ConnectedWithTiming) {
+    connected = ConnectionTestError;
+    return false; // not connected
+  }
+
   tCanFrame f;
   f.id = clientID;
   f.length = 1;
 
   f.data[0] = VWTP_TPDU_CONNTEST;
 
+  // check ecu resp
+  tCanFrame resp = AwaitECUResponse(f);
+
+  if (resp.length == 6 && resp.data[0] == VWTP_TPDU_CONNACK) {
+    connected = ConnectedWithTiming;
+    return true;
+  }
+
+  connected = ConnectionTestError;
+  return false;
+}
+
+// await ecu response
+tCanFrame VWTP20::AwaitECUResponse() {
+  unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
+
+  tCanFrame resp;
+  uint16_t counter = 0;
+  do {
+    // for counter timing
+    delayMicroseconds(10);
+
+    if (isCANAvail()) {
+      CANReadMsg(&resp);
+    }
+    if (++counter >= ctimeout) {
+      Serial.print(millis());
+      Serial.println(F(" E] Timed out while awaiting a response."));
+      connected = ConnectionResponseError;
+      break;
+    }
+  } while (resp.id != ecuID);
+
+  return resp;
+}
+
+// send can frame and return ecu response
+tCanFrame VWTP20::AwaitECUResponse(tCanFrame f) {
   CANSendMsg(f);
+  return AwaitECUResponse();
+}
+
+tCanFrame VWTP20::AwaitECUResponseCmd(tCanFrame f, uint8_t cmd) {
+  CANSendMsg(f);
+  return AwaitECUResponseCmd(cmd);
+}
+
+tCanFrame VWTP20::AwaitECUResponseCmd(uint8_t cmd) {
+  unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
+
+  tCanFrame resp;
+  uint16_t counter = 0;
+  do {
+    // for counter timing
+    delayMicroseconds(10);
+
+    if (isCANAvail()) {
+      CANReadMsg(&resp);
+    }
+    if (++counter >= ctimeout) {
+      Serial.print(millis());
+      Serial.println(F(" E] Timed out while awaiting a response."));
+      connected = ConnectionResponseError;
+      break;
+    }
+  } while (resp.id != ecuID && resp.data[0] != cmd);
+
+  return resp;
 }
 
 // DEPRECIATED: Print CAN packet

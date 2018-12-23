@@ -1,36 +1,39 @@
 #include "config.h"
 
-#ifdef CANLIB_SEEED
+#ifdef CANLIB_MCNEIGHT
 
 #include <Arduino.h>
+#include <CAN.h>
+#include <SPI.h>
 #include <canwrapper.h>
-#include <mcp_can.h>
-#include <mcp_can_dfs.h>
-
-MCP_CAN CAN(10);
 
 // Init CAN and setup masks/filters
 bool CANInit() {
-  uint8_t ret = CAN.begin(CAN_500KBPS);
-  CAN.init_Mask(0, CAN_STDID, ~(0x201 | 0x300) & 0x7FF); // rx ecu mask
-  CAN.init_Mask(1, CAN_STDID, ~(0x200 | 0x740) & 0x7FF); // tx client mask
+  CAN.begin(CAN_BPS_500K, MCP2515_MODE_CONFIG);
+  CAN_Filter mask;
 
-  canRxFrameBuf.clear();
-  return ret == CAN_OK;
+  // rx ecu mask FIXME
+  mask.id = ~(0x201 | 0x300) & 0x7FF;
+  CAN.setMask(0, mask);
+
+  // tx client mask FIXME
+  mask.id = ~(0x201 | 0x300) & 0x7FF;
+  CAN.setMask(1, mask);
+
+  CAN.begin(CAN_BPS_500K);
+
+  return true;
 }
 
 // Check if a CAN message has been rx
-bool isCANAvail() { return CAN.checkReceive() == CAN_MSGAVAIL; }
+bool isCANAvail() { return CAN.available(); }
 
 // Read CAN rx message buffer into tCanFrame
-void CANReadMsg(tCanFrame *f) {
-  CAN.readMsgBuf(&f->length, f->data);
-  f->id = CAN.getCanId();
-}
+void CANReadMsg(tCanFrame *f) { CAN.read(&f->id, &f->length, f->data); }
 
 // Send tCanFrame to CAN tx message buffer
 void CANSendMsg(tCanFrame f) {
-  CAN.sendMsgBuf(f.id, CAN_STDID, f.length, f.data);
+  CAN.write(f.id, CAN_STANDARD_FRAME, f.length, f.data);
 
 #ifdef DEBUG_CANSEND
   CANPacketPrint(F("TX]"), f);

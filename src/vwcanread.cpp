@@ -66,8 +66,6 @@ void readCmd(char cmd) {
     Serial.println(F("I] Dumping ram... [press any key to exit]"));
     delay(500);
 
-    // Run while no serial is rx
-    // while (!Serial.available())
     dumpRam();
     break;
 
@@ -108,7 +106,7 @@ void dumpMessages() {
   }
 }
 
-// R  dump ecu ram
+// R  dump ecu ram FIXME
 void dumpRam() {
   Serial.println(F("R] Dumping ram..."));
   VWTP20 v;

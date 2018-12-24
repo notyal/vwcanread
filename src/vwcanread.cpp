@@ -123,6 +123,7 @@ void dumpRam() {
     if (micros() >= (t1 + chantestMicros - mintimeMicros))
       v.ChannelTest();
 
+    // startdiagsession
     if (mseq++ == 0) {
       f.id = v.GetClientID();
       f.length = 5;

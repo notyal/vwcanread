@@ -22,8 +22,6 @@ typedef struct {
   uint8_t data[8];
 } tCanFrame; // 13 bytes
 
-RingBuf<tCanFrame, 16> canRxFrameBuf; // 208 bytes
-
 bool CANInit();
 bool isCANAvail();
 void CANReadMsg(tCanFrame *);

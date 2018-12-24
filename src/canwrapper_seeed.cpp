@@ -15,7 +15,6 @@ bool CANInit() {
   CAN.init_Mask(0, CAN_STDID, ~(0x201 | 0x300) & 0x7FF); // rx ecu mask
   CAN.init_Mask(1, CAN_STDID, ~(0x200 | 0x740) & 0x7FF); // tx client mask
 
-  canRxFrameBuf.clear();
   return ret == CAN_OK;
 }
 

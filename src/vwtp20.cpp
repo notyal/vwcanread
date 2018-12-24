@@ -58,7 +58,7 @@ void VWTP20::Connect() {
 
   // set timing
   setTiming();
-  if (connected != ConnectedWithTiming) {
+  if (connected < ConnectedWithTiming) {
     connected = ConnectionTimingError;
     return; // failure
   }

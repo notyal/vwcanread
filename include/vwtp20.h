@@ -8,13 +8,13 @@
 #include <canwrapper.h>
 
 typedef enum CONNECTION {
-  ConnectionResponseError = -4,
-  ConnectionTestError = -3,
-  ConnectionTimingError = -2,
-  ConnectionError = -1,
-  NotConnected = 0,
-  Connected = 1,
-  ConnectedWithTiming = 2
+  ConnectionResponseError,
+  ConnectionTestError,
+  ConnectionTimingError,
+  ConnectionError,
+  NotConnected,
+  Connected,
+  ConnectedWithTiming,
 } CONNECTION;
 
 class VWTP20 {

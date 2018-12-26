@@ -8,7 +8,7 @@
 // *****************************************************************************
 // clang-format off
 
-#define _TASK_TIMECRITICAL      // Enable monitoring scheduling overruns
+// #define _TASK_TIMECRITICAL      // Enable monitoring scheduling overruns
 // #define _TASK_SLEEP_ON_IDLE_RUN // Enable 1 ms SLEEP_IDLE powerdowns between tasks if no callback methods were invoked during the pass
 // #define _TASK_STATUS_REQUEST    // Compile with support for StatusRequest functionality - triggering tasks on status change events in addition to time only
 // #define _TASK_WDT_IDS           // Compile with support for wdt control points and task ids
@@ -28,6 +28,19 @@
 // END TaskScheduler Configuration
 // *****************************************************************************
 
+#include "canwrapper.h"
+
+typedef struct {
+  bool ready = false; // true when can message is ready to be sent
+  tCanFrame frame;
+} tCanBuf;
+
+typedef struct {
+  bool ready = false; // true when serial is ready
+  char data[SERIAL_BUF_SIZE];
+} tSerialBuf;
+
+void taskMainCallback();
 void taskPrintSerialCallback();
 void taskRxMsgCallback();
 void taskTxMsgCallback();
@@ -43,6 +56,7 @@ void taskChanTestCallback();
 //   * channelTest 10 ms
 Scheduler tsLow, tsHigh, tsCrit;
 
+Task taskMain(TASK_IMMEDIATE, TASK_FOREVER, &taskMainCallback, &tsLow);
 Task taskPrintSerial(10, TASK_FOREVER, &taskPrintSerialCallback, &tsLow);
 Task taskRxMsg(TASK_IMMEDIATE, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
 Task taskTxMsg(1, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
@@ -55,6 +69,8 @@ public:
   bool Execute();
   void Print(const char *);
   void Println(const char *);
+  static void TX(tCanFrame);
+  static void TXInternal(tCanFrame);
 
 private:
 };

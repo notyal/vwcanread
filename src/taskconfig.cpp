@@ -1,3 +1,5 @@
+// handle sending data in vwtp channel
+
 #include "taskconfig.h"
 #include "canwrapper.h"
 #include "config.h"
@@ -5,17 +7,16 @@
 #include <Arduino.h>
 
 VWTP20 v;
+TASKCONFIG tc;
 
 // task vars
 unsigned long lastMsgMs = 0; // millis when last message was sent
 
 RingBuf<tCanFrame, 16> canRxFrameBuf; // 208 bytes
 
-bool txReady = false; // true when can message is ready to be sent
-tCanFrame txTaskSend;
-
-bool serialReady = false; // true when serial is ready to be sent
-char serialBuf[SERIAL_BUF_SIZE];
+tCanBuf txTaskSend;
+tCanBuf txTaskSendInternal; // for responding to ack messages
+tSerialBuf serialBuf;
 
 TASKCONFIG::TASKCONFIG() {
   tsLow.setHighPriorityScheduler(&tsHigh);
@@ -28,9 +29,9 @@ bool TASKCONFIG::Execute() { return tsLow.execute(); }
 
 // PrintSerial : tsLow 10ms
 void taskPrintSerialCallback() {
-  if (serialReady) {
-    Serial.print(serialBuf);
-    serialReady = false;
+  if (serialBuf.ready) {
+    Serial.print(serialBuf.data);
+    serialBuf.ready = false;
   }
 }
 
@@ -38,24 +39,52 @@ void taskPrintSerialCallback() {
 void TASKCONFIG::Print(const char *msg) {
   // msg size cannot be bigger than serialbuf size or remaining buffer
   if (sizeof(msg) > SERIAL_BUF_SIZE ||
-      (serialReady && sizeof(msg) > SERIAL_BUF_SIZE - strlen(serialBuf)))
+      (serialBuf.ready &&
+       sizeof(msg) > SERIAL_BUF_SIZE - strlen(serialBuf.data)))
     return;
 
-  if (!serialReady) {
+  if (!serialBuf.ready) {
     // new msg
-    strcpy(serialBuf, msg);
+    strcpy(serialBuf.data, msg);
   } else {
     // existing msg
-    strcat(serialBuf, msg);
+    strcat(serialBuf.data, msg);
   }
 
-  serialReady = true;
+  serialBuf.ready = true;
 }
 
 // async println to serial
 void TASKCONFIG::Println(const char *msg) {
   Print(msg);
   Print("\n");
+}
+
+void TASKCONFIG::TX(tCanFrame f) {
+  // skip if already has message
+  if (txTaskSend.ready) {
+    tc.Println("w] txts OVERFLOW");
+    return;
+  }
+
+  txTaskSend.ready = true;
+  txTaskSendInternal.frame = f;
+}
+
+void TASKCONFIG::TXInternal(tCanFrame f) {
+  // skip if already has message
+  if (txTaskSendInternal.ready) {
+    tc.Println("w] txtsI OVERFLOW");
+    return;
+  }
+
+  txTaskSendInternal.ready = true;
+  txTaskSendInternal.frame = f;
+}
+
+// taskMain : tsLow TASK_IMMEDIATE
+void taskMainCallback() {
+  // TODO
 }
 
 // rxMsg : tsHigh TASK_IMMEDIATE
@@ -67,24 +96,33 @@ void taskRxMsgCallback() {
   tCanFrame f;
   CANReadMsg(&f);
 
+  // prepare response if ack is required
+  if (v.CheckDataACK(&f)) {
+    tCanFrame f;
+    v.PrepareDataACKResponse(true, &f);
+    tc.TXInternal(f);
+  }
+
   if (!canRxFrameBuf.isFull()) {
     canRxFrameBuf.push(f);
   }
-
-  // TODO
 }
 
 // txMsg : tsHigh 1ms
 void taskTxMsgCallback() {
-  // send only if no tx is ready
-  // or sent in last 5 ms
-  if (!txReady || millis() - v.GetTxMinTimeMs() < lastMsgMs)
-    return;
+  // send ACK response first
+  if (txTaskSendInternal.ready) {
+    CANSendMsg(txTaskSendInternal.frame);
+    lastMsgMs = millis();
+    txTaskSendInternal.ready = false;
+  }
 
-  CANSendMsg(txTaskSend);
-  lastMsgMs = millis();
-
-  txReady = false;
+  // send only if tx is ready
+  if (txTaskSend.ready) {
+    CANSendMsg(txTaskSend.frame);
+    lastMsgMs = millis();
+    txTaskSend.ready = false;
+  }
 }
 
 // ChanTest : tsCrit 10ms

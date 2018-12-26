@@ -17,6 +17,13 @@ typedef enum CONNECTION {
   ConnectedWithTiming,
 } CONNECTION;
 
+typedef enum VWTPMsgType {
+  BCAST,     // length: 7 bytes
+  CHANSETUP, // length: 7 bytes
+  CHANPARAM, // length: 1 or 6 bytes
+  DATA,      // length: 2-8 bytes
+} VWTPMsgType;
+
 class VWTP20 {
 public:
   VWTP20();
@@ -26,6 +33,8 @@ public:
   static unsigned int MsToMicros(float);
 
   uint8_t GetSequence();
+  uint8_t NextSequence();
+  uint8_t ResetSequence();
   uint32_t GetClientID();
   uint32_t GetEcuID();
   CONNECTION GetConnected();
@@ -37,6 +46,9 @@ public:
   tCanFrame AwaitECUResponseCmd(uint8_t);
   tCanFrame AwaitECUResponseCmd(tCanFrame, uint8_t);
 
+  bool CheckDataACK(tCanFrame *);
+  void VWTP20::PrepareDataACKResponse(bool, tCanFrame *);
+
 private:
   uint8_t sequence;
   uint32_t clientID;
@@ -44,6 +56,7 @@ private:
   CONNECTION connected;
   float txTimeoutMs; // T1
   float txMinTimeMs; // T3
+  bool isLastPacket;
 
   // int prepVwtpMsg(uint8_t *buf, tVWTP_MSG msg);
   void channelInit();

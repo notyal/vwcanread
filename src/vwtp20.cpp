@@ -11,6 +11,7 @@ VWTP20::VWTP20() {
   connected = NotConnected;
   txTimeoutMs = 0.0; // T1
   txMinTimeMs = 0.0; // T3
+  // isLastPacket;
 }
 
 // Getters
@@ -245,4 +246,45 @@ void VWTP20::PrintPacketMs(tCanFrame f) {
   char buf[16];
   sprintf(buf, "%06lu D]", millis());
   CANPacketPrint(buf, f);
+}
+
+// Check data ack
+bool VWTP20::CheckDataACK(tCanFrame *f) {
+  uint8_t op = f->data[0] >> 8;
+  sequence = (f->data[0] & 0xF);
+
+  if (op == 0x0 || op == 0x1)
+    return true; // tx ack op is 0xB if ready or 0x9 if not ready
+  else if (op == 0x2 || op == 0x3)
+    return false;
+
+  // default case
+  return false;
+}
+
+// prepare response data ack
+void VWTP20::PrepareDataACKResponse(bool readyForNextPacket, tCanFrame *f) {
+  uint8_t op;
+  if (readyForNextPacket)
+    op = 0xB;
+  else
+    op = 0x9;
+
+  NextSequence();
+
+  f->id = clientID;
+  f->length = 1;
+  f->data[0] = (op << 8 | sequence);
+}
+
+uint8_t VWTP20::NextSequence() {
+  if (++sequence > 0xF)
+    sequence = 0;
+
+  return sequence;
+}
+
+uint8_t VWTP20::ResetSequence() {
+  sequence = 0;
+  return sequence;
 }

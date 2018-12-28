@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <canwrapper.h>
 
+////////////////////////////////////////////////////////////////////////
 VWTP20::VWTP20() {
   sequence = 0;
   clientID = 0x000; // rx
@@ -14,6 +15,7 @@ VWTP20::VWTP20() {
   // isLastPacket;
 }
 
+////////////////////////////////////////////////////////////////////////
 // Getters
 uint8_t VWTP20::GetSequence() { return sequence; }
 uint32_t VWTP20::GetClientID() { return clientID; }
@@ -23,6 +25,7 @@ void VWTP20::SetConnected(CONNECTION c) { connected = c; }
 float VWTP20::GetTxTimeoutMs() { return txTimeoutMs; }
 float VWTP20::GetTxMinTimeMs() { return txMinTimeMs; }
 
+////////////////////////////////////////////////////////////////////////
 void VWTP20::Connect() {
   // TODO
   // 1 Setup KWP2000
@@ -66,6 +69,7 @@ void VWTP20::Connect() {
   }
 }
 
+////////////////////////////////////////////////////////////////////////
 void VWTP20::Disconnect() {
   if (connected < ConnectedWithTiming)
     return;
@@ -78,6 +82,7 @@ void VWTP20::Disconnect() {
   CANSendMsg(f);
 }
 
+////////////////////////////////////////////////////////////////////////
 // init channel for Connect()
 void VWTP20::channelInit() {
   tCanFrame f;
@@ -97,6 +102,7 @@ void VWTP20::channelInit() {
   CANSendMsg(f);
 }
 
+////////////////////////////////////////////////////////////////////////
 // ESTABLISH TIMING for Connect()
 void VWTP20::setTiming() {
   tCanFrame f;
@@ -143,6 +149,7 @@ void VWTP20::setTiming() {
   }
 }
 
+////////////////////////////////////////////////////////////////////////
 // decode timing from frame
 float VWTP20::decodeTimingMs(uint8_t byt) {
   uint8_t bunit = (byt >> 6) & 0b11;
@@ -166,6 +173,7 @@ float VWTP20::decodeTimingMs(uint8_t byt) {
   return unit * scale;
 }
 
+////////////////////////////////////////////////////////////////////////
 // convert ms to microseconds
 unsigned int VWTP20::MsToMicros(float ms) { return (unsigned int)(ms * 1000); }
 
@@ -256,15 +264,18 @@ tCanFrame VWTP20::AwaitECUResponseCmd(uint8_t cmd) {
 }
 */
 
+////////////////////////////////////////////////////////////////////////
 // DEPRECIATED: Print CAN packet
 void VWTP20::PrintPacket(tCanFrame f) { CANPacketPrint(F("D]"), f); }
 
+////////////////////////////////////////////////////////////////////////
 void VWTP20::PrintPacketMs(tCanFrame f) {
   char buf[16];
   sprintf(buf, "%06lu D]", millis());
   CANPacketPrint(buf, f);
 }
 
+////////////////////////////////////////////////////////////////////////
 // Check data ack
 bool VWTP20::CheckDataACK(tCanFrame *f) {
   uint8_t op = f->data[0] >> 8;
@@ -279,6 +290,7 @@ bool VWTP20::CheckDataACK(tCanFrame *f) {
   return false;
 }
 
+////////////////////////////////////////////////////////////////////////
 // prepare response data ack
 void VWTP20::PrepareDataACKResponse(bool readyForNextPacket, tCanFrame *f) {
   uint8_t op;
@@ -294,6 +306,7 @@ void VWTP20::PrepareDataACKResponse(bool readyForNextPacket, tCanFrame *f) {
   f->data[0] = (op << 8 | sequence);
 }
 
+////////////////////////////////////////////////////////////////////////
 uint8_t VWTP20::NextSequence() {
   if (++sequence > 0xF)
     sequence = 0;
@@ -301,6 +314,7 @@ uint8_t VWTP20::NextSequence() {
   return sequence;
 }
 
+////////////////////////////////////////////////////////////////////////
 uint8_t VWTP20::ResetSequence() {
   sequence = 0;
   return sequence;

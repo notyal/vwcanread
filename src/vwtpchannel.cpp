@@ -6,6 +6,55 @@
 #include "vwtp20.h"
 #include <Arduino.h>
 
+// *****************************************************************************
+// BEGIN TaskScheduler Configuration
+// *****************************************************************************
+// clang-format off
+
+// #define _TASK_TIMECRITICAL      // Enable monitoring scheduling overruns
+// #define _TASK_SLEEP_ON_IDLE_RUN // Enable 1 ms SLEEP_IDLE powerdowns between tasks if no callback methods were invoked during the pass
+// #define _TASK_STATUS_REQUEST    // Compile with support for StatusRequest functionality - triggering tasks on status change events in addition to time only
+// #define _TASK_WDT_IDS           // Compile with support for wdt control points and task ids
+// #define _TASK_LTS_POINTER       // Compile with support for local task storage pointer
+#define _TASK_PRIORITY          // Support for layered scheduling priority
+// #define _TASK_MICRO_RES         // Support for microsecond resolution
+// #define _TASK_STD_FUNCTION      // Support for std::function (ESP8266 and ESP32 ONLY)
+// #define _TASK_DEBUG             // Make all methods and variables public for debug purposes
+// #define _TASK_INLINE            // Make all methods "inline" - needed to support some multi-tab, multi-file implementations
+// #define _TASK_TIMEOUT           // Support for overall task timeout
+// #define _TASK_OO_CALLBACKS      // Support for dynamic callback method binding
+
+#include <TaskScheduler.h>
+
+// clang-format on
+// *****************************************************************************
+// END TaskScheduler Configuration
+// *****************************************************************************
+
+// Schedulers:
+// tsLow  -- low priority
+//   * printSerial 10ms
+// tsHigh -- high priority
+//   * rxMsg TASK_IMMEDIATE
+//   * txMsg 1ms
+// tsCrit -- critical priority
+//   * channelTest TASK_IMMEDIATE
+Scheduler tsLow, tsHigh, tsCrit;
+
+// callbacks
+void taskMainCallback();
+void taskPrintSerialCallback();
+void taskRxMsgCallback();
+void taskTxMsgCallback();
+void taskChanTestCallback();
+
+// tasks
+Task taskMain(TASK_IMMEDIATE, TASK_FOREVER, &taskMainCallback, &tsLow);
+Task taskPrintSerial(10, TASK_FOREVER, &taskPrintSerialCallback, &tsLow);
+Task taskRxMsg(TASK_IMMEDIATE, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
+Task taskTxMsg(1, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
+Task taskChanTest(TASK_IMMEDIATE, TASK_FOREVER, &taskChanTestCallback, &tsCrit);
+
 VWTP20 v;
 VWTPCHANNEL vc;
 tCANRxState rxstate;
@@ -19,12 +68,14 @@ tCanBuf txTaskSend;
 tCanBuf txTaskSendInternal; // for responding to ack messages
 tSerialBuf serialBuf;
 
+////////////////////////////////////////////////////////////////////////
 VWTPCHANNEL::VWTPCHANNEL() {
   tsLow.setHighPriorityScheduler(&tsHigh);
   tsHigh.setHighPriorityScheduler(&tsCrit);
   rxstate = READY;
 }
 
+////////////////////////////////////////////////////////////////////////
 // run channel until given function is false
 // Warning: function must not have any delay()
 void VWTPCHANNEL::RunWhile(bool (*func)()) {
@@ -35,23 +86,48 @@ void VWTPCHANNEL::RunWhile(bool (*func)()) {
   v.Disconnect();
 }
 
+////////////////////////////////////////////////////////////////////////
 // setup channel
 void VWTPCHANNEL::Enable() {
   v.Connect();
   tsLow.enableAll(true);
 }
 
+////////////////////////////////////////////////////////////////////////
 // execute channel tasks
 bool VWTPCHANNEL::Execute() { return tsLow.execute(); }
 
-// PrintSerial : tsLow 10ms
-void taskPrintSerialCallback() {
-  if (serialBuf.ready) {
-    Serial.print(serialBuf.data);
-    serialBuf.ready = false;
+////////////////////////////////////////////////////////////////////////
+// prepare transmitting message
+void VWTPCHANNEL::TX(tCanFrame f) {
+  // skip if already has message
+  if (txTaskSend.ready) {
+    vc.Println("w] txts OVERFLOW");
+    return;
   }
+
+  txTaskSend.ready = true;
+  txTaskSendInternal.frame = f;
 }
 
+////////////////////////////////////////////////////////////////////////
+// prepare transmitting message for internal
+void VWTPCHANNEL::TXInternal(tCanFrame f) {
+  // skip if already has message
+  if (txTaskSendInternal.ready) {
+    vc.Println("w] txtsI OVERFLOW");
+    return;
+  }
+
+  txTaskSendInternal.ready = true;
+  txTaskSendInternal.frame = f;
+}
+
+// *****************************************************************************
+// Print functions
+// *****************************************************************************
+
+////////////////////////////////////////////////////////////////////////
 // async print to serial
 void VWTPCHANNEL::Print(const char *msg) {
   // msg size cannot be bigger than serialbuf size or remaining buffer
@@ -71,41 +147,33 @@ void VWTPCHANNEL::Print(const char *msg) {
   serialBuf.ready = true;
 }
 
+////////////////////////////////////////////////////////////////////////
 // async println to serial
 void VWTPCHANNEL::Println(const char *msg) {
   Print(msg);
   Print("\n");
 }
 
-// prepare transmitting message
-void VWTPCHANNEL::TX(tCanFrame f) {
-  // skip if already has message
-  if (txTaskSend.ready) {
-    vc.Println("w] txts OVERFLOW");
-    return;
-  }
+// *****************************************************************************
+// Callback functions
+// *****************************************************************************
 
-  txTaskSend.ready = true;
-  txTaskSendInternal.frame = f;
-}
-
-// prepare transmitting message for internal
-void VWTPCHANNEL::TXInternal(tCanFrame f) {
-  // skip if already has message
-  if (txTaskSendInternal.ready) {
-    vc.Println("w] txtsI OVERFLOW");
-    return;
-  }
-
-  txTaskSendInternal.ready = true;
-  txTaskSendInternal.frame = f;
-}
-
+////////////////////////////////////////////////////////////////////////
 // taskMain : tsLow TASK_IMMEDIATE
 void taskMainCallback() {
   // TODO
 }
 
+////////////////////////////////////////////////////////////////////////
+// PrintSerial : tsLow 10ms
+void taskPrintSerialCallback() {
+  if (serialBuf.ready) {
+    Serial.print(serialBuf.data);
+    serialBuf.ready = false;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////
 // rxMsg : tsHigh TASK_IMMEDIATE
 // CAN RECEIVE
 void taskRxMsgCallback() {
@@ -141,6 +209,7 @@ void taskRxMsgCallback() {
   }
 }
 
+////////////////////////////////////////////////////////////////////////
 // txMsg : tsHigh 1ms
 // CAN TRANSMIT
 void taskTxMsgCallback() {
@@ -159,6 +228,7 @@ void taskTxMsgCallback() {
   }
 }
 
+////////////////////////////////////////////////////////////////////////
 // ChanTest : tsCrit TASK_IMMEDIATE
 void taskChanTestCallback() {
   // only send chantest if connected with timing

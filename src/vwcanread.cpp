@@ -4,6 +4,7 @@
 #include "vwtp20.h"
 #include <Arduino.h>
 #include <canwrapper.h>
+#include <vwtpchannel.h>
 
 #ifdef DEBUG_MEMORY
 #define DEBUG_MEMORY_MS 5000 // min ms between printing memory messages
@@ -109,6 +110,11 @@ void dumpMessages() {
 // R  dump ecu ram FIXME
 void dumpRam() {
   Serial.println(F("R] Dumping ram..."));
+  VWTPCHANNEL vc;
+
+  // while !Serial.available()
+  vc.RunWhile([]() -> bool { return !Serial.available(); });
+
   /* TODO DELETE
   VWTP20 v;
   v.Connect();

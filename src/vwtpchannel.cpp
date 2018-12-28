@@ -8,6 +8,7 @@
 
 VWTP20 v;
 VWTPCHANNEL vc;
+tCANRxState rxstate;
 
 // task vars
 unsigned long lastMsgMs = 0; // millis when last message was sent
@@ -21,10 +22,26 @@ tSerialBuf serialBuf;
 VWTPCHANNEL::VWTPCHANNEL() {
   tsLow.setHighPriorityScheduler(&tsHigh);
   tsHigh.setHighPriorityScheduler(&tsCrit);
+  rxstate = READY;
 }
 
-void VWTPCHANNEL::Enable() { tsLow.enableAll(true); }
+// run channel until given function is false
+// Warning: function must not have any delay()
+void VWTPCHANNEL::RunWhile(bool (*func)()) {
+  Enable();
+  while (func())
+    Execute();
 
+  v.Disconnect();
+}
+
+// setup channel
+void VWTPCHANNEL::Enable() {
+  v.Connect();
+  tsLow.enableAll(true);
+}
+
+// execute channel tasks
 bool VWTPCHANNEL::Execute() { return tsLow.execute(); }
 
 // PrintSerial : tsLow 10ms
@@ -60,6 +77,7 @@ void VWTPCHANNEL::Println(const char *msg) {
   Print("\n");
 }
 
+// prepare transmitting message
 void VWTPCHANNEL::TX(tCanFrame f) {
   // skip if already has message
   if (txTaskSend.ready) {
@@ -71,6 +89,7 @@ void VWTPCHANNEL::TX(tCanFrame f) {
   txTaskSendInternal.frame = f;
 }
 
+// prepare transmitting message for internal
 void VWTPCHANNEL::TXInternal(tCanFrame f) {
   // skip if already has message
   if (txTaskSendInternal.ready) {
@@ -88,6 +107,7 @@ void taskMainCallback() {
 }
 
 // rxMsg : tsHigh TASK_IMMEDIATE
+// CAN RECEIVE
 void taskRxMsgCallback() {
   // rx only if CAN is avail
   if (!isCANAvail())
@@ -95,6 +115,19 @@ void taskRxMsgCallback() {
 
   tCanFrame f;
   CANReadMsg(&f);
+
+  // handle channel test response
+  if (rxstate == CHAN_TEST && f.length == 6) {
+    if (f.data[0] == VWTP_TPDU_CONNACK) {
+      v.SetConnected(ConnectedWithTiming);
+      rxstate = READY;
+      return;
+    } else {
+      v.SetConnected(ConnectionTestError);
+      rxstate = READY;
+      return;
+    }
+  }
 
   // prepare response if ack is required
   if (v.CheckDataACK(&f)) {
@@ -109,6 +142,7 @@ void taskRxMsgCallback() {
 }
 
 // txMsg : tsHigh 1ms
+// CAN TRANSMIT
 void taskTxMsgCallback() {
   // send ACK response first
   if (txTaskSendInternal.ready) {
@@ -125,14 +159,20 @@ void taskTxMsgCallback() {
   }
 }
 
-// ChanTest : tsCrit 10ms
+// ChanTest : tsCrit TASK_IMMEDIATE
 void taskChanTestCallback() {
   // only send chantest if connected with timing
   // or if tx timeout is soon
-  if (v.GetConnected() < ConnectedWithTiming ||
+  if (rxstate != READY || v.GetConnected() < ConnectedWithTiming ||
       millis() - v.GetTxTimeoutMs() - (v.GetTxTimeoutMs() / 2) < lastMsgMs)
     return;
 
+  tCanFrame f;
+  f.id = v.GetClientID();
+  f.length = 1;
+  f.data[0] = VWTP_TPDU_CONNTEST;
+
   lastMsgMs = millis();
-  v.ChannelTest();
+  rxstate = CHAN_TEST;
+  vc.TX(f);
 }

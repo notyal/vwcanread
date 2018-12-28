@@ -109,6 +109,7 @@ void dumpMessages() {
 // R  dump ecu ram FIXME
 void dumpRam() {
   Serial.println(F("R] Dumping ram..."));
+  /* TODO DELETE
   VWTP20 v;
   v.Connect();
   unsigned int chantestMicros = v.MsToMicros(v.GetTxTimeoutMs());
@@ -182,6 +183,8 @@ void dumpRam() {
   Serial.println(F("R] Done."));
   Serial.print(F("E] GetConnected="));
   Serial.println(v.GetConnected());
+
+  */
 }
 
 void liveMode() {

@@ -28,6 +28,7 @@ class VWTP20 {
 public:
   VWTP20();
   void Connect();
+  void Disconnect();
   static void PrintPacket(tCanFrame);
   static void PrintPacketMs(tCanFrame);
   static unsigned int MsToMicros(float);
@@ -38,16 +39,17 @@ public:
   uint32_t GetClientID();
   uint32_t GetEcuID();
   CONNECTION GetConnected();
+  void SetConnected(CONNECTION c);
   float GetTxTimeoutMs(); // T1
   float GetTxMinTimeMs(); // T3
-  bool ChannelTest();
-  tCanFrame AwaitECUResponse();
-  tCanFrame AwaitECUResponse(tCanFrame);
-  tCanFrame AwaitECUResponseCmd(uint8_t);
-  tCanFrame AwaitECUResponseCmd(tCanFrame, uint8_t);
+  // bool ChannelTest();
+  // tCanFrame AwaitECUResponse();
+  // tCanFrame AwaitECUResponse(tCanFrame);
+  // tCanFrame AwaitECUResponseCmd(uint8_t);
+  // tCanFrame AwaitECUResponseCmd(tCanFrame, uint8_t);
 
   bool CheckDataACK(tCanFrame *);
-  void VWTP20::PrepareDataACKResponse(bool, tCanFrame *);
+  void PrepareDataACKResponse(bool, tCanFrame *);
 
 private:
   uint8_t sequence;

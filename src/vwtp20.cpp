@@ -19,6 +19,7 @@ uint8_t VWTP20::GetSequence() { return sequence; }
 uint32_t VWTP20::GetClientID() { return clientID; }
 uint32_t VWTP20::GetEcuID() { return ecuID; }
 CONNECTION VWTP20::GetConnected() { return connected; }
+void VWTP20::SetConnected(CONNECTION c) { connected = c; }
 float VWTP20::GetTxTimeoutMs() { return txTimeoutMs; }
 float VWTP20::GetTxMinTimeMs() { return txMinTimeMs; }
 
@@ -63,9 +64,21 @@ void VWTP20::Connect() {
     connected = ConnectionTimingError;
     return; // failure
   }
-  ChannelTest();
 }
 
+void VWTP20::Disconnect() {
+  if (connected < ConnectedWithTiming)
+    return;
+
+  tCanFrame f;
+  f.id = clientID;
+  f.length = 1;
+  f.data[0] = VWTP_TPDU_DISCONN;
+
+  CANSendMsg(f);
+}
+
+// init channel for Connect()
 void VWTP20::channelInit() {
   tCanFrame f;
   f.id = 0x200; // BCAST
@@ -84,7 +97,7 @@ void VWTP20::channelInit() {
   CANSendMsg(f);
 }
 
-// ESTABLISH TIMING
+// ESTABLISH TIMING for Connect()
 void VWTP20::setTiming() {
   tCanFrame f;
   f.id = clientID;
@@ -156,7 +169,8 @@ float VWTP20::decodeTimingMs(uint8_t byt) {
 // convert ms to microseconds
 unsigned int VWTP20::MsToMicros(float ms) { return (unsigned int)(ms * 1000); }
 
-// send chan_test message for keepalive
+/*
+// TODO DELETE send chan_test message for keepalive
 bool VWTP20::ChannelTest() {
   if (connected < ConnectedWithTiming) {
     connected = ConnectionTestError;
@@ -181,7 +195,7 @@ bool VWTP20::ChannelTest() {
   return false;
 }
 
-// await ecu response
+// TODO DELETE await ecu response
 tCanFrame VWTP20::AwaitECUResponse() {
   unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
 
@@ -205,17 +219,19 @@ tCanFrame VWTP20::AwaitECUResponse() {
   return resp;
 }
 
-// send can frame and return ecu response
+// TODO DELETE send can frame and return ecu response
 tCanFrame VWTP20::AwaitECUResponse(tCanFrame f) {
   CANSendMsg(f);
   return AwaitECUResponse();
 }
 
+// TODO DELETE
 tCanFrame VWTP20::AwaitECUResponseCmd(tCanFrame f, uint8_t cmd) {
   CANSendMsg(f);
   return AwaitECUResponseCmd(cmd);
 }
 
+// TODO DELETE
 tCanFrame VWTP20::AwaitECUResponseCmd(uint8_t cmd) {
   unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
 
@@ -238,6 +254,7 @@ tCanFrame VWTP20::AwaitECUResponseCmd(uint8_t cmd) {
 
   return resp;
 }
+*/
 
 // DEPRECIATED: Print CAN packet
 void VWTP20::PrintPacket(tCanFrame f) { CANPacketPrint(F("D]"), f); }

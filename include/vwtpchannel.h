@@ -30,6 +30,12 @@
 
 #include "canwrapper.h"
 
+typedef enum tCANRxState {
+  READY,
+  MSG_WAIT,
+  CHAN_TEST,
+} tCANRxState;
+
 typedef struct {
   bool ready = false; // true when can message is ready to be sent
   tCanFrame frame;
@@ -60,17 +66,18 @@ Task taskMain(TASK_IMMEDIATE, TASK_FOREVER, &taskMainCallback, &tsLow);
 Task taskPrintSerial(10, TASK_FOREVER, &taskPrintSerialCallback, &tsLow);
 Task taskRxMsg(TASK_IMMEDIATE, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
 Task taskTxMsg(1, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
-Task taskChanTest(10, TASK_FOREVER, &taskChanTestCallback, &tsCrit);
+Task taskChanTest(TASK_IMMEDIATE, TASK_FOREVER, &taskChanTestCallback, &tsCrit);
 
 class VWTPCHANNEL {
 public:
   VWTPCHANNEL();
+  void RunWhile(bool (*)());
   void Enable();
   bool Execute();
   void Print(const char *);
   void Println(const char *);
-  static void TX(tCanFrame);
-  static void TXInternal(tCanFrame);
+  void TX(tCanFrame);
+  void TXInternal(tCanFrame);
 
 private:
 };

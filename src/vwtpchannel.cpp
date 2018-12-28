@@ -1,13 +1,13 @@
 // handle sending data in vwtp channel
 
-#include "taskconfig.h"
+#include "vwtpchannel.h"
 #include "canwrapper.h"
 #include "config.h"
 #include "vwtp20.h"
 #include <Arduino.h>
 
 VWTP20 v;
-TASKCONFIG tc;
+VWTPCHANNEL vc;
 
 // task vars
 unsigned long lastMsgMs = 0; // millis when last message was sent
@@ -18,14 +18,14 @@ tCanBuf txTaskSend;
 tCanBuf txTaskSendInternal; // for responding to ack messages
 tSerialBuf serialBuf;
 
-TASKCONFIG::TASKCONFIG() {
+VWTPCHANNEL::VWTPCHANNEL() {
   tsLow.setHighPriorityScheduler(&tsHigh);
   tsHigh.setHighPriorityScheduler(&tsCrit);
 }
 
-void TASKCONFIG::Enable() { tsLow.enableAll(true); }
+void VWTPCHANNEL::Enable() { tsLow.enableAll(true); }
 
-bool TASKCONFIG::Execute() { return tsLow.execute(); }
+bool VWTPCHANNEL::Execute() { return tsLow.execute(); }
 
 // PrintSerial : tsLow 10ms
 void taskPrintSerialCallback() {
@@ -36,7 +36,7 @@ void taskPrintSerialCallback() {
 }
 
 // async print to serial
-void TASKCONFIG::Print(const char *msg) {
+void VWTPCHANNEL::Print(const char *msg) {
   // msg size cannot be bigger than serialbuf size or remaining buffer
   if (sizeof(msg) > SERIAL_BUF_SIZE ||
       (serialBuf.ready &&
@@ -55,15 +55,15 @@ void TASKCONFIG::Print(const char *msg) {
 }
 
 // async println to serial
-void TASKCONFIG::Println(const char *msg) {
+void VWTPCHANNEL::Println(const char *msg) {
   Print(msg);
   Print("\n");
 }
 
-void TASKCONFIG::TX(tCanFrame f) {
+void VWTPCHANNEL::TX(tCanFrame f) {
   // skip if already has message
   if (txTaskSend.ready) {
-    tc.Println("w] txts OVERFLOW");
+    vc.Println("w] txts OVERFLOW");
     return;
   }
 
@@ -71,10 +71,10 @@ void TASKCONFIG::TX(tCanFrame f) {
   txTaskSendInternal.frame = f;
 }
 
-void TASKCONFIG::TXInternal(tCanFrame f) {
+void VWTPCHANNEL::TXInternal(tCanFrame f) {
   // skip if already has message
   if (txTaskSendInternal.ready) {
-    tc.Println("w] txtsI OVERFLOW");
+    vc.Println("w] txtsI OVERFLOW");
     return;
   }
 
@@ -100,7 +100,7 @@ void taskRxMsgCallback() {
   if (v.CheckDataACK(&f)) {
     tCanFrame f;
     v.PrepareDataACKResponse(true, &f);
-    tc.TXInternal(f);
+    vc.TXInternal(f);
   }
 
   if (!canRxFrameBuf.isFull()) {

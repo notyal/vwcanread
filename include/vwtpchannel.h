@@ -1,7 +1,7 @@
 #include "config.h"
 
-#ifndef TASKCONFIG_H
-#define TASKCONFIG_H
+#ifndef VWTPCHANNEL_H
+#define VWTPCHANNEL_H
 
 // *****************************************************************************
 // BEGIN TaskScheduler Configuration
@@ -62,9 +62,9 @@ Task taskRxMsg(TASK_IMMEDIATE, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
 Task taskTxMsg(1, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
 Task taskChanTest(10, TASK_FOREVER, &taskChanTestCallback, &tsCrit);
 
-class TASKCONFIG {
+class VWTPCHANNEL {
 public:
-  TASKCONFIG();
+  VWTPCHANNEL();
   void Enable();
   bool Execute();
   void Print(const char *);
@@ -75,4 +75,4 @@ public:
 private:
 };
 
-#endif /* TASKCONFIG_H */
+#endif /* VWTPCHANNEL_H */

@@ -23,7 +23,7 @@ void setup() {
   Serial.println();
 
   if (CANInit()) {
-    // delay(500);
+    delay(1000);
     Serial.println(F("CAN Init"));
     helpCmd();
   } else {

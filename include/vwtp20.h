@@ -31,6 +31,7 @@ public:
   void Disconnect();
   static void PrintPacket(tCanFrame);
   static void PrintPacketMs(tCanFrame);
+  static void PacketToChar(tCanFrame, char *);
   static unsigned int MsToMicros(float);
 
   uint8_t GetSequence();

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "vwtp20.h"
 #include <Arduino.h>
+#include <stdarg.h>
 
 // *****************************************************************************
 // BEGIN TaskScheduler Configuration
@@ -36,7 +37,6 @@
 //   * printSerial 10ms
 // tsHigh -- high priority
 //   * rxMsg TASK_IMMEDIATE
-//   * txMsg 1ms
 // tsCrit -- critical priority
 //   * channelTest TASK_IMMEDIATE
 Scheduler tsLow, tsHigh, tsCrit;
@@ -52,7 +52,6 @@ void taskChanTestCallback();
 Task taskMain(TASK_IMMEDIATE, TASK_FOREVER, &taskMainCallback, &tsLow);
 Task taskPrintSerial(10, TASK_FOREVER, &taskPrintSerialCallback, &tsLow);
 Task taskRxMsg(TASK_IMMEDIATE, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
-Task taskTxMsg(1, TASK_FOREVER, &taskRxMsgCallback, &tsHigh);
 Task taskChanTest(TASK_IMMEDIATE, TASK_FOREVER, &taskChanTestCallback, &tsCrit);
 
 VWTP20 v;
@@ -60,19 +59,22 @@ VWTPCHANNEL vc;
 tCANRxState rxstate;
 
 // task vars
-unsigned long lastMsgMs = 0; // millis when last message was sent
-
+unsigned long lastMsgMs = 0;          // millis when last message was sent
 RingBuf<tCanFrame, 16> canRxFrameBuf; // 208 bytes
-
 tCanBuf txTaskSend;
 tCanBuf txTaskSendInternal; // for responding to ack messages
 tSerialBuf serialBuf;
+char printBuf[128];
+char packetToCharBuf[60];
 
 ////////////////////////////////////////////////////////////////////////
 VWTPCHANNEL::VWTPCHANNEL() {
   tsLow.setHighPriorityScheduler(&tsHigh);
   tsHigh.setHighPriorityScheduler(&tsCrit);
   rxstate = READY;
+
+  txTaskSend.ready = false;
+  txTaskSendInternal.ready = false;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -84,6 +86,7 @@ void VWTPCHANNEL::RunWhile(bool (*func)()) {
     Execute();
 
   v.Disconnect();
+  Serial.println(F("c] Exit Channel."));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -100,27 +103,17 @@ bool VWTPCHANNEL::Execute() { return tsLow.execute(); }
 ////////////////////////////////////////////////////////////////////////
 // prepare transmitting message
 void VWTPCHANNEL::TX(tCanFrame f) {
-  // skip if already has message
-  if (txTaskSend.ready) {
-    vc.Println("w] txts OVERFLOW");
-    return;
-  }
-
-  txTaskSend.ready = true;
-  txTaskSendInternal.frame = f;
+  lastMsgMs = millis();
+  CANSendMsg(f);
+  vc.DebugPrintPacket(f, "TX");
 }
 
 ////////////////////////////////////////////////////////////////////////
 // prepare transmitting message for internal
 void VWTPCHANNEL::TXInternal(tCanFrame f) {
-  // skip if already has message
-  if (txTaskSendInternal.ready) {
-    vc.Println("w] txtsI OVERFLOW");
-    return;
-  }
-
-  txTaskSendInternal.ready = true;
-  txTaskSendInternal.frame = f;
+  lastMsgMs = millis();
+  CANSendMsg(f);
+  // vc.DebugPrintPacket(f, "TXI");
 }
 
 // *****************************************************************************
@@ -148,10 +141,21 @@ void VWTPCHANNEL::Print(const char *msg) {
 }
 
 ////////////////////////////////////////////////////////////////////////
+// async printf to serial
+void VWTPCHANNEL::Printf(const char *fmt, ...) {
+  va_list va;
+  va_start(va, fmt);
+  vsprintf(printBuf, fmt, va);
+  va_end(va);
+
+  Print(printBuf);
+}
+
+////////////////////////////////////////////////////////////////////////
 // async println to serial
 void VWTPCHANNEL::Println(const char *msg) {
   Print(msg);
-  Print("\n");
+  Print("\r\n");
 }
 
 // *****************************************************************************
@@ -161,7 +165,28 @@ void VWTPCHANNEL::Println(const char *msg) {
 ////////////////////////////////////////////////////////////////////////
 // taskMain : tsLow TASK_IMMEDIATE
 void taskMainCallback() {
+  if (rxstate != READY || v.GetConnected() < ConnectedWithTiming)
+    return;
+
+  static uint16_t count = 0;
+  if (count == 0) {
+    // TODO need to count sequence
+    // Start debug 1000021089
+    // tCanFrame f;
+    // f.id = v.GetClientID();
+    // f.length == ;
+    // f.data[0] == 0x10;
+
+    // vc.TX(f);
+    count++;
+  }
   // TODO
+  while (!canRxFrameBuf.isEmpty()) {
+    // TODO Count for sequence
+    tCanFrame f;
+    canRxFrameBuf.pop(f);
+    vc.DebugPrintPacket(f, "MDATA");
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -184,48 +209,57 @@ void taskRxMsgCallback() {
   tCanFrame f;
   CANReadMsg(&f);
 
-  // handle channel test response
-  if (rxstate == CHAN_TEST && f.length == 6) {
-    if (f.data[0] == VWTP_TPDU_CONNACK) {
-      v.SetConnected(ConnectedWithTiming);
-      rxstate = READY;
-      return;
-    } else {
-      v.SetConnected(ConnectionTestError);
-      rxstate = READY;
-      return;
-    }
+  // handle data stream
+  // TODO
+
+  // send channel test response
+  if (f.length == 1 && f.data[0] == VWTP_TPDU_CONNTEST) {
+    vc.Printf("c] ct %5lu tx resp\r\n", millis());
+    tCanFrame f;
+    f.id = v.GetClientID();
+    f.length = 6;
+
+    // a1 0f 8a ff 4a ff
+    f.data[0] = VWTP_TPDU_CONNACK;
+    f.data[1] = 0x0F; // Block size (num packets before ACK)
+    f.data[2] = 0x8A; // T1 tx timeout
+    f.data[3] = 0xFF; // T2 unused
+    f.data[4] = 0x4A; // T3 min time for tx packet
+    f.data[5] = 0xFF; // T4 unused
+
+    vc.TXInternal(f);
   }
 
-  // prepare response if ack is required
+  // handle channel test response
+  if (rxstate == CHAN_TEST && f.length == 6) {
+    // vc.Printf("c] ct %5lu rx resp\r\n", millis());
+    if (f.data[0] == VWTP_TPDU_CONNACK)
+      v.SetConnected(ConnectedWithTiming);
+    else
+      v.SetConnected(ConnectionTestError);
+
+    rxstate = READY;
+    return;
+  } else if (rxstate == CHAN_TEST) {
+    vc.Println("c] rxstate CT");
+  }
+
+  // send response if ack is required
   if (v.CheckDataACK(&f)) {
     tCanFrame f;
     v.PrepareDataACKResponse(true, &f);
     vc.TXInternal(f);
   }
 
-  if (!canRxFrameBuf.isFull()) {
-    canRxFrameBuf.push(f);
-  }
-}
-
-////////////////////////////////////////////////////////////////////////
-// txMsg : tsHigh 1ms
-// CAN TRANSMIT
-void taskTxMsgCallback() {
-  // send ACK response first
-  if (txTaskSendInternal.ready) {
-    CANSendMsg(txTaskSendInternal.frame);
-    lastMsgMs = millis();
-    txTaskSendInternal.ready = false;
-  }
-
-  // send only if tx is ready
-  if (txTaskSend.ready) {
-    CANSendMsg(txTaskSend.frame);
-    lastMsgMs = millis();
-    txTaskSend.ready = false;
-  }
+  // push message to buffer
+  if (rxstate == MSG_WAIT)
+    if (!canRxFrameBuf.isFull()) {
+      canRxFrameBuf.push(f);
+    } else {
+      vc.Println("rxbuf full");
+    }
+  else if (rxstate == READY)
+    vc.DebugPrintPacket(f, "RX");
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -234,15 +268,26 @@ void taskChanTestCallback() {
   // only send chantest if connected with timing
   // or if tx timeout is soon
   if (rxstate != READY || v.GetConnected() < ConnectedWithTiming ||
-      millis() - v.GetTxTimeoutMs() - (v.GetTxTimeoutMs() / 2) < lastMsgMs)
+      millis() - (unsigned long)v.GetTxTimeoutMs() < lastMsgMs) {
     return;
+  }
 
   tCanFrame f;
   f.id = v.GetClientID();
   f.length = 1;
   f.data[0] = VWTP_TPDU_CONNTEST;
 
-  lastMsgMs = millis();
   rxstate = CHAN_TEST;
-  vc.TX(f);
+  vc.TXInternal(f);
+
+  // vc.Printf("c] %lu CT\r\n", millis());
+}
+
+////////////////////////////////////////////////////////////////////////
+void VWTPCHANNEL::DebugPrintPacket(tCanFrame f, const char *str) {
+  // DEBUG
+  v.PacketToChar(f, packetToCharBuf);
+
+  vc.Printf("c] %s %d %5lu %s\r\n", str, v.GetConnected(), millis(),
+            packetToCharBuf);
 }

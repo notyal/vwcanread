@@ -8,7 +8,7 @@ init(autoreset=True)
 
 async def main(loop):
     reader, writer = await serial_asyncio.open_serial_connection(
-        url='/dev/cu.wchusbserial1420', baudrate=115200
+        url='/dev/cu.wchusbserial1410', baudrate=115200
     )
     received = recv(reader, "CAN Init")
     await asyncio.wait([received])

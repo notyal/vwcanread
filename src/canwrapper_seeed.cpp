@@ -15,7 +15,7 @@ bool CANInit() {
   CAN.init_Mask(0, CAN_STDID, ~(0x201 | 0x300) & 0x7FF); // rx ecu mask
   CAN.init_Mask(1, CAN_STDID, ~(0x200 | 0x740) & 0x7FF); // tx client mask
 
-  return ret == CAN_OK;
+  return ret == CAN_OK && CAN.checkError() == CAN_OK;
 }
 
 // Check if a CAN message has been rx

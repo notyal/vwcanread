@@ -36,6 +36,9 @@ void VWTP20::Connect() {
 
   uint8_t counter = 0;
 
+  Serial.println(F("E] Channel setup ..."));
+  delay(100);
+
   // setup channel
   do {
     delay(50);
@@ -65,6 +68,7 @@ void VWTP20::Connect() {
   setTiming();
   if (connected < ConnectedWithTiming) {
     connected = ConnectionTimingError;
+    Serial.println(F("E] Channel setup timing error."));
     return; // failure
   }
 }
@@ -273,6 +277,21 @@ void VWTP20::PrintPacketMs(tCanFrame f) {
   char buf[16];
   sprintf(buf, "%06lu D]", millis());
   CANPacketPrint(buf, f);
+}
+
+////////////////////////////////////////////////////////////////////////
+// Print tCanFrame to char[58]
+void VWTP20::PacketToChar(tCanFrame f, char *out) {
+  sprintf(out, "0x%03lx  ", f.id); // ~8 chars
+
+  char mbuf[3];
+
+  for (byte i = 0; i < f.length; i++) {
+    snprintf(mbuf, sizeof(mbuf), "%02x", f.data[i]); // 3*8*2 = 48 chars
+    strcat(out, mbuf);
+  }
+
+  // + '\0' = 57 chars
 }
 
 ////////////////////////////////////////////////////////////////////////

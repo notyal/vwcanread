@@ -70,10 +70,10 @@ void readCmd(char cmd) {
     dumpRam();
     break;
 
-  case 'L':
-    Serial.println(F("I] Live mode.. [use Q to exit]"));
-    liveMode();
-    break;
+    // case 'L':
+    //   Serial.println(F("I] Live mode.. [use Q to exit]"));
+    //   liveMode();
+    //   break;
 
   case '\n':
     break;
@@ -93,7 +93,7 @@ void helpCmd() {
   Serial.println(F("I] Valid commands:"));
   Serial.println(F("I] D  dump canbus data"));
   Serial.println(F("I] R  dump ecu ram"));
-  Serial.println(F("I] L  live mode"));
+  // Serial.println(F("I] L  live mode"));
 }
 
 // D  dump canbus messages
@@ -113,86 +113,11 @@ void dumpRam() {
   VWTPCHANNEL vc;
 
   // while !Serial.available()
-  vc.RunWhile([]() -> bool { return !Serial.available(); });
-
-  /* TODO DELETE
-  VWTP20 v;
-  v.Connect();
-  unsigned int chantestMicros = v.MsToMicros(v.GetTxTimeoutMs());
-  unsigned int mintimeMicros = v.MsToMicros(v.GetTxMinTimeMs());
-  unsigned long t1;
-  uint16_t mseq = 0;
-  tCanFrame f, resp;
-
-  while (v.GetConnected() >= ConnectedWithTiming) {
-    t1 = micros();
-    // send chantest at least mintimeMicros before timeout
-    if (micros() >= (t1 + chantestMicros - mintimeMicros))
-      v.ChannelTest();
-
-    // startdiagsession
-    if (mseq++ == 0) {
-      f.id = v.GetClientID();
-      f.length = 5;
-      f.data[0] = 0x10;
-      f.data[1] = 0x00;
-      f.data[2] = 0x02;
-      f.data[3] = 0x10;
-      f.data[4] = 0x89;
-
-      resp = v.AwaitECUResponseCmd(f, 0xB1);
-      if (resp.length == 1 && resp.data[0] == 0xB1) {
-        tCanFrame r2 = v.AwaitECUResponseCmd(0x10);
-        delayMicroseconds(mintimeMicros);
-        if (r2.length == 5 && r2.data[0] == 0x10) {
-          f.length = 1;
-          f.data[0] = 0xB1;
-          CANSendMsg(f);
-          v.PrintPacketMs(r2);
-        }
-      }
-    }
-
-    if (Serial.available() && Serial.read() == 'Q') {
-      f.id = v.GetClientID();
-      f.length = 1;
-      f.data[0] = VWTP_TPDU_DISCONN;
-      v.AwaitECUResponse(f);
-      return;
-    }
-
-    // delay between messages
-    delayMicroseconds(mintimeMicros);
-  }
-
-  if (v.GetConnected() < ConnectedWithTiming) {
-    Serial.println(F("R] Error connecting to ECU."));
-
-    Serial.print(F("E] GetClientID="));
-    Serial.println(v.GetClientID(), HEX);
-
-    Serial.print(F("E] GetEcuID="));
-    Serial.println(v.GetEcuID(), HEX);
-
-    Serial.print(F("E] GetConnected="));
-    Serial.println(v.GetConnected());
-
-    Serial.print(F("E] GetTxMinTimeMs="));
-    Serial.println(v.GetTxMinTimeMs());
-
-    Serial.print(F("E] GetTxTimeoutMs="));
-    Serial.println(v.GetTxTimeoutMs());
-
-    return;
-  }
-
-  Serial.println(F("R] Done."));
-  Serial.print(F("E] GetConnected="));
-  Serial.println(v.GetConnected());
-
-  */
+  // vc.RunWhile([]() -> bool { return !Serial.available(); });
+  vc.RunCmds();
 }
 
+/*
 void liveMode() {
   unsigned long t, t2;
   char buf[128] = {0};
@@ -234,3 +159,4 @@ void liveMode() {
     }
   }
 }
+*/

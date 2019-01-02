@@ -25,14 +25,17 @@ class VWTPCHANNEL {
 public:
   VWTPCHANNEL();
   void RunWhile(bool (*)());
+  void RunCmds();
   void Enable();
   bool Execute();
   void Print(const char *);
   void Printf(const char *, ...);
+  void Println();
   void Println(const char *);
   void TX(tCanFrame);
   void TXInternal(tCanFrame);
   void DebugPrintPacket(tCanFrame, const char *);
+  void SendKWP2000PacketStr(const char *, uint8_t);
 
 private:
 };

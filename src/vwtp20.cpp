@@ -12,7 +12,7 @@ VWTP20::VWTP20() {
   connected = NotConnected;
   txTimeoutMs = 0.0; // T1
   txMinTimeMs = 0.0; // T3
-  // isLastPacket;
+  dataState = Reset;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -134,7 +134,7 @@ void VWTP20::setTiming() {
     if (isCANAvail()) {
       CANReadMsg(&resp);
     }
-    if (++counter >= 10000) {
+    if (++counter >= 20000) {
       Serial.print(millis());
       Serial.println(F(" E] Timed out while awaiting a timing response."));
       connected = ConnectionTimingError;
@@ -181,93 +181,6 @@ float VWTP20::decodeTimingMs(uint8_t byt) {
 // convert ms to microseconds
 unsigned int VWTP20::MsToMicros(float ms) { return (unsigned int)(ms * 1000); }
 
-/*
-// TODO DELETE send chan_test message for keepalive
-bool VWTP20::ChannelTest() {
-  if (connected < ConnectedWithTiming) {
-    connected = ConnectionTestError;
-    return false; // not connected
-  }
-
-  tCanFrame f;
-  f.id = clientID;
-  f.length = 1;
-
-  f.data[0] = VWTP_TPDU_CONNTEST;
-
-  // check ecu resp
-  tCanFrame resp = AwaitECUResponse(f);
-
-  if (resp.length == 6 && resp.data[0] == VWTP_TPDU_CONNACK) {
-    connected = ConnectedWithTiming;
-    return true;
-  }
-
-  connected = ConnectionTestError;
-  return false;
-}
-
-// TODO DELETE await ecu response
-tCanFrame VWTP20::AwaitECUResponse() {
-  unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
-
-  tCanFrame resp;
-  uint16_t counter = 0;
-  do {
-    // for counter timing
-    delayMicroseconds(10);
-
-    if (isCANAvail()) {
-      CANReadMsg(&resp);
-    }
-    if (++counter >= ctimeout) {
-      Serial.print(millis());
-      Serial.println(F(" E] Timed out while awaiting a response."));
-      connected = ConnectionResponseError;
-      break;
-    }
-  } while (resp.id != ecuID);
-
-  return resp;
-}
-
-// TODO DELETE send can frame and return ecu response
-tCanFrame VWTP20::AwaitECUResponse(tCanFrame f) {
-  CANSendMsg(f);
-  return AwaitECUResponse();
-}
-
-// TODO DELETE
-tCanFrame VWTP20::AwaitECUResponseCmd(tCanFrame f, uint8_t cmd) {
-  CANSendMsg(f);
-  return AwaitECUResponseCmd(cmd);
-}
-
-// TODO DELETE
-tCanFrame VWTP20::AwaitECUResponseCmd(uint8_t cmd) {
-  unsigned int ctimeout = MsToMicros(txTimeoutMs) / 10;
-
-  tCanFrame resp;
-  uint16_t counter = 0;
-  do {
-    // for counter timing
-    delayMicroseconds(10);
-
-    if (isCANAvail()) {
-      CANReadMsg(&resp);
-    }
-    if (++counter >= ctimeout) {
-      Serial.print(millis());
-      Serial.println(F(" E] Timed out while awaiting a response."));
-      connected = ConnectionResponseError;
-      break;
-    }
-  } while (resp.id != ecuID && resp.data[0] != cmd);
-
-  return resp;
-}
-*/
-
 ////////////////////////////////////////////////////////////////////////
 // DEPRECIATED: Print CAN packet
 void VWTP20::PrintPacket(tCanFrame f) { CANPacketPrint(F("D]"), f); }
@@ -292,6 +205,20 @@ void VWTP20::PacketToChar(tCanFrame f, char *out) {
   }
 
   // + '\0' = 57 chars
+}
+
+////////////////////////////////////////////////////////////////////////
+uint8_t VWTP20::NextSequence() {
+  if (++sequence > 0xF)
+    sequence = 0;
+
+  return sequence;
+}
+
+////////////////////////////////////////////////////////////////////////
+uint8_t VWTP20::ResetSequence() {
+  sequence = 0;
+  return sequence;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -326,15 +253,48 @@ void VWTP20::PrepareDataACKResponse(bool readyForNextPacket, tCanFrame *f) {
 }
 
 ////////////////////////////////////////////////////////////////////////
-uint8_t VWTP20::NextSequence() {
-  if (++sequence > 0xF)
-    sequence = 0;
+// returns true if data is ready for reading with ReadData(tDataBlock *)
+// TODO: check sequence so packets are in order
+bool VWTP20::CheckData(tCanFrame *f) {
+  uint8_t op = f->data[0] >> 8;
+  sequence = (f->data[0] & 0xF);
 
-  return sequence;
+  // read packets
+  if (op >= 0x1 || op <= 0x3) {
+    uint8_t i = 1;
+    if (dataState == Reset) {
+      i = 3;
+      dataBuf.packetLen[1] = f->data[1];
+      dataBuf.packetLen[2] = f->data[2];
+    }
+
+    for (; i < (f->length); i++)
+      dataBuf.buf[dataBuf.length++] = f->data[i];
+  }
+
+  // more packets
+  if (op == 0x0 || op == 0x2)
+    dataState = MorePackets;
+
+  // last packet
+  if (op == 0x1 || op == 0x3)
+    dataState = LastPacket;
+
+  // return state
+  if (dataState == LastPacket)
+    return true; // ready to call ReadData(tDataBlock *)
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////
-uint8_t VWTP20::ResetSequence() {
-  sequence = 0;
-  return sequence;
+// reads from dataBuf and resets for next use
+void VWTP20::ReadData(tDataBlock *block) {
+  // read buffer
+  block->length = dataBuf.length;
+  memcpy(block->buf, dataBuf.buf, dataBuf.length);
+
+  // reset buffer
+  dataState = Reset;
+  dataBuf.length = 0;
+  return;
 }
